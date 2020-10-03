@@ -1,19 +1,11 @@
 const EventCategory = require('../models/eventCategory');
 const response = require('../utils/response');
 const fileHelper = require('../utils/file');
-
-const responseMessage = {
-    cretae: 'Create category success',
-    invalidCreate: 'Invalid create category',
-    notFound: 'Category not found!',
-    delete: 'Delete has ben success!',
-    update: 'Update has ben success!',
-    fetch: 'Fetch All has ben success!',
-};
+const message = require('../utils/responseMessage');
 
 exports.createCategory = async (req, res) => {
+    const file = req.file;
     try {
-        const file = req.file;
         const url = req.protocol + '://' + req.get('host');
         const { name, description, parent_id } = req.body;
         const cateogry = await EventCategory.build({
@@ -25,11 +17,15 @@ exports.createCategory = async (req, res) => {
         });
         const resCategory = await cateogry.save();
         if (!resCategory) {
-            throw new Error(responseMessage.invalidCreate);
+            throw new Error(message.invalidCreate);
         }
-        res.status(201).json(response.create(resCategory, responseMessage.cretae));
+        res.status(201).json(response.create(resCategory, message.cretae));
     } catch (err) {
-        res.status(200).json(response.bad(err.message));
+        const error = err.errors[0].message;
+        if (file) {
+            await fileHelper.deleteFile('images/' + file.filename);
+        }
+        res.status(400).json(response.bad(error ? error : err.message));
     }
 };
 
@@ -38,14 +34,14 @@ exports.deleteCategory = async (req, res) => {
         const id = req.params.id;
         const category = await EventCategory.findOne({ where: { id } });
         if (!category) {
-            res.status(404).json(response.nodeFound(responseMessage.notFound));
+            res.status(404).json(response.nodeFound(message.notFound));
         }
         if (category.pathIcon) {
             fileHelper.deleteFile(category.pathIcon);
         }
         const delCategory = await category.destroy();
         if (delCategory) {
-            res.status(200).json(response.okDelete(responseMessage.delete));
+            res.status(200).json(response.okDelete(message.delete));
         }
     } catch (err) {
         res.status(200).json(response.bad(err.message));
@@ -60,12 +56,12 @@ exports.editCategory = async (req, res) => {
         const id = req.params.id;
         const category = await EventCategory.findByPk(id);
         if (!category) {
-            res.status(404).json(response.nodeFound(responseMessage.notFound));
+            res.status(404).json(response.nodeFound(message.notFound));
         }
         category.name = name;
         category.description = description;
         category.parent_id = parent_id;
-        if (file) {
+        if (file && category.pathIcon) {
             if (category.pathIcon) {
                 fileHelper.deleteFile(category.pathIcon);
             }
@@ -76,9 +72,13 @@ exports.editCategory = async (req, res) => {
         if (!saveCategory) {
             throw new Error('update failed!');
         }
-        res.status(200).json(response.update(saveCategory, responseMessage.update));
+        res.status(200).json(response.update(saveCategory, message.update));
     } catch (err) {
-        res.status(200).json(response.bad(err.message));
+        const error = err.errors[0].message;
+        if (file) {
+            await fileHelper.deleteFile('images/' + file.filename);
+        }
+        res.status(400).json(response.bad(error ? error : err.message));
     }
 }
 
@@ -95,7 +95,7 @@ exports.fetchAll = async (req, res) => {
                 }]
             }]
         });
-        res.status(200).json(response.update(eventCategory, responseMessage.fetch));
+        res.status(200).json(response.update(eventCategory, message.fetch));
     } catch (err) {
         res.status(200).json(response.bad(err.message));
     }
